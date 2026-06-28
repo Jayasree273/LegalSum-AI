@@ -1,0 +1,149 @@
+{
+  "name": "Client",
+  "nodes": [
+    {
+      "parameters": {
+        "public": true,
+        "options": {}
+      },
+      "id": "4ea072b4-6970-4892-9268-c21c50a610ac",
+      "name": "When chat message received",
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        0,
+        0
+      ],
+      "webhookId": "879e1230-7944-4c26-8755-a648aba8c981"
+    },
+    {
+      "parameters": {},
+      "id": "493b32a0-af20-4f6d-86e2-863202ceb51f",
+      "name": "Conversation Memory",
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        80,
+        240
+      ]
+    },
+    {
+      "parameters": {
+        "options": {
+          "systemMessage": "You are a professional legal triage assistant helping clients document legal issues and collect evidence.\n\nYour process:\n\n1. Ask ONE question at a time to collect:\n   - Nature of the issue\n   - Who is involved\n   - Frequency and timing\n   - Harm, threat, violence or danger\n   - Evidence (CCTV, audio, photos, messages, complaints, witnesses, timestamps)\n   - Contact details (email or phone)\n\n2. If the user answers ONLY PART of your question (for example, they answer about evidence but NOT about contact info), you MUST ask a follow-up question to get the missing information. NEVER assume the missing part.\n\n3. If user says they don't have evidence, ask about OTHER evidence types. Keep asking until you know what evidence they DO have.\n\n4. Contact details are MANDATORY:\n   - You must ask a **separate, clear question** only about contact info:\n     “What is the best email address or phone number for the authorities to contact you?”\n   - If you still don’t have an email or phone number, you MUST NOT send the case.\n   - If the user refuses to share contact details, explain that without contact details you cannot file the case and DO NOT call the Send Email Tool.\n\n5. Only after collecting ALL information, including contact details, classify as:\n   - DOMESTIC: noise complaints, disputes, arguments, non-violent family/neighbor issues\n   - CRIMINAL: violence, threats, harassment, property damage, trespassing\n\n6. When you have collected everything and are ready to send email:\n   - You MUST actually call the Send Email Tool - do not just say you sent it\n   - For DOMESTIC cases: use To=domestic.case.violence@gmail.com\n   - For CRIMINAL cases: use To=criminal.case.violence@gmail.com\n   - Subject: New Domestic Case or New Criminal Case Report\n   - Message must include: Case Summary with all details, Evidence List, and the user's Contact Info\n   - After the tool executes successfully, tell user: “I have sent the case details to the appropriate authority. They will contact you soon.”\n\nCRITICAL: Never call the Send Email Tool unless you already know the user’s email address or phone number.\n"
+        }
+      },
+      "id": "330d921d-4544-463f-94e0-bae1cadc7979",
+      "name": "Legal Assistant Agent",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3,
+      "position": [
+        352,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Tool for sending case details to domestic.case.violence@gmail.com (domestic) or criminal.case.violence@gmail.com (criminal) after evidence collection is complete. Use this tool only after you have collected the user’s email address or phone number and included it in the message.\nIf you don’t know their contact info, DO NOT use this tool. Ask the user: What is the best email or phone number for the authorities to contact you?",
+        "sendTo": "={{ $fromAI('To', ``, 'string') }}",
+        "subject": "={{ $fromAI('Subject', ``, 'string') }}",
+        "message": "={{ $fromAI('Message', ``, 'string') }}",
+        "options": {}
+      },
+      "id": "e12022cd-37b5-499f-9bb3-7d596af30e87",
+      "name": "Send Email Tool",
+      "type": "n8n-nodes-base.gmailTool",
+      "typeVersion": 2.1,
+      "position": [
+        368,
+        240
+      ],
+      "webhookId": "e3f5ce7c-5cca-4aa8-8a88-5514ce9b8283",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "R1R6DqVCSqIO9sQw",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "model": "llama-3.3-70b-versatile",
+        "options": {}
+      },
+      "id": "a55f5d70-8e98-46f5-a1a4-4b24506218d7",
+      "name": "Groq Chat Model",
+      "type": "@n8n/n8n-nodes-langchain.lmChatGroq",
+      "typeVersion": 1,
+      "position": [
+        496,
+        240
+      ],
+      "credentials": {
+        "groqApi": {
+          "id": "45g9L4vxltzYtKpO",
+          "name": "Groq account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Conversation Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "Legal Assistant Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "Legal Assistant Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email Tool": {
+      "ai_tool": [
+        [
+          {
+            "node": "Legal Assistant Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "Legal Assistant Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "ffb92013-8c3e-47d4-b3b8-5adc6c51fc12",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "4915e53176cc67536151c8f24d3f1ac58af8785804f73b4d24a6dc14ef8fcf7c"
+  },
+  "id": "IwP7eQ1SDXfSZgot",
+  "tags": []
+}

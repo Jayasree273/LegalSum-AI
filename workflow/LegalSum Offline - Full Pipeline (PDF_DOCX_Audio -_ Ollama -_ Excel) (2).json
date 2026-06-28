@@ -1,0 +1,378 @@
+{
+  "name": "LegalSum Offline - Full Pipeline (PDF/DOCX/Audio -> Ollama -> Excel)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "legal-intake",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "0ee645fe-21f8-425f-b482-e94625fc0388",
+      "name": "Legal Intake Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        -1120,
+        -48
+      ],
+      "webhookId": "legal-intake-webhook-id"
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "=/data/uploads/{{$binary.data.fileName}}",
+        "options": {}
+      },
+      "id": "25e7aaec-5fa9-4448-a5d7-00dd5283a713",
+      "name": "Save Upload to /data/uploads",
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        -896,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{\n  file_path: \"/data/uploads/\" + $binary.data.fileName,\n  file_name: $binary.data.fileName,\n  file_ext: $binary.data.fileName.split('.').pop().toLowerCase()\n}];"
+      },
+      "id": "73abbfee-1ce3-46c5-97d7-db08bc7aeb9a",
+      "name": "File Info",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -672,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "dataType": "string",
+        "value1": "={{$json[\"file_ext\"]}}",
+        "rules": {
+          "rules": [
+            {
+              "value2": "pdf",
+              "output": 1
+            },
+            {
+              "value2": "docx",
+              "output": 2
+            },
+            {
+              "operation": "regex",
+              "value2": "^(mp3|wav|m4a)$",
+              "output": 3
+            }
+          ]
+        }
+      },
+      "id": "6600f13b-6694-482c-99db-d70840917ef3",
+      "name": "Route by Type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 1,
+      "position": [
+        -448,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "command": "=. /data/venv/bin/activate && python3 /data/extract_pdf.py \"{{$json['file_path']}}\""
+      },
+      "id": "895be87d-2123-48df-b23c-cea1d0dfb2fa",
+      "name": "Extract PDF Text",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        -224,
+        -240
+      ]
+    },
+    {
+      "parameters": {
+        "command": ". /data/venv/bin/activate && python3 /data/extract_docx.py \"{{$json[\"file_path\"]}}\""
+      },
+      "id": "6a800433-3fd4-4a3b-8b81-5b75f8c8f7df",
+      "name": "Extract DOCX Text",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        -224,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "command": "=. /data/venv/bin/activate && python3 /data/transcribe.py \"{{$json['file_path']}}\""
+      },
+      "id": "74e95322-297a-4c76-bb30-a0d6d2baf5a0",
+      "name": "Transcribe Audio",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        -224,
+        144
+      ]
+    },
+    {
+      "parameters": {
+        "requestMethod": "POST",
+        "url": "http://host.docker.internal:11434/api/generate",
+        "jsonParameters": true,
+        "options": {
+          "bodyContentType": "json"
+        },
+        "bodyParametersJson": "{\n  \"model\": \"mistral:7b-instruct-q4_K_M\",\n  \"prompt\": \"You are LegalSum AI — an advanced legal document analysis assistant. Think like a senior trial judge and experienced litigation lawyer: be neutral, skeptical, and detail-oriented. Your goal is to help lawyers quickly see both the strengths AND weaknesses of the case.\\n\\nRead the provided document and extract the following JSON:\\n\\n{\\n  \\\"parties\\\": [],\\n  \\\"incident_summary\\\": \\\"\\\",\\n  \\\"key_facts\\\": [],\\n  \\\"evidence\\\": [],\\n  \\\"ipc_sections\\\": [],\\n  \\\"timeline\\\": [],\\n  \\\"red_flags\\\": [],\\n  \\\"recommendations\\\": [],\\n  \\\"final_summary\\\": \\\"\\\"\\n}\\n\\nFilling rules:\\n- \\\"parties\\\": List of main people or entities with their roles, e.g. \\\"A – complainant\\\", \\\"B – accused\\\", \\\"C – key witness\\\".\\n- \\\"incident_summary\\\": 3–6 sentences, neutral, judge-style summary of what happened, focusing on who, what, when, where, and why.\\n- \\\"key_facts\\\": Short, bullet-style strings, each containing exactly one important fact. Include dates, locations, amounts, and relationships when available.\\n- \\\"evidence\\\": For each piece of evidence, write a string like \\\"TYPE – description (strength: strong/medium/weak, based on the document only)\\\".\\n- \\\"ipc_sections\\\": If any legal sections are mentioned (IPC, CrPC, special acts), list them as \\\"Section X – short description – how it is being used / possibly applicable\\\". If none are mentioned, return an empty list.\\n- \\\"timeline\\\": Chronological list of major events from earliest to latest. Use strings like \\\"YYYY-MM-DD – event\\\". If the date is missing, use \\\"UNKNOWN-DATE – event\\\".\\n- \\\"red_flags\\\": This is the MOST important field. List all weaknesses, contradictions, missing details, evidentiary gaps, biased or unreliable statements, procedural problems (e.g. delay in FIR, missing signatures, no independent witnesses), jurisdiction / limitation issues, and anything that could seriously hurt the case in court.\\n- \\\"recommendations\\\": Actionable next steps for the lawyer, such as \\\"obtain CCTV footage for ...\\\", \\\"cross-check medical report date with incident date\\\", \\\"prepare defence around alibi at ...\\\", \\\"consider settlement because evidence is weak\\\", etc.\\n- \\\"final_summary\\\": A judge-style, high-level assessment of the overall strength of the case, clearly balancing strengths vs weaknesses and highlighting practical strategy (investigate more / likely strong case / risky case / settlement advisable). Do NOT give any generic disclaimers.\\n\\nImportant guidelines:\\n- Work ONLY with the information actually present in the document text. Do NOT invent facts or sections.\\n- If something is unclear or ambiguous, mention this explicitly in \\\"red_flags\\\" or \\\"final_summary\\\" instead of guessing.\\n- Keep everything concise but information-dense. Do not copy-paste long paragraphs from the document.\\n- Return strictly valid JSON with double quotes, no comments, and no text before or after the JSON.\\n\\nDocument:\\n- Return strictly valid JSON with quotes, no comments, and no text before or after the JSON.\\n\\nDocument:\\n{{$json.stdout}}\",\n  \"stream\": false\n}",
+        "headerParametersJson": "{}",
+        "queryParametersJson": "{}"
+      },
+      "id": "d8db4a5f-2556-46d5-bf2d-fe604c508707",
+      "name": "Ollama Analysis",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 1,
+      "position": [
+        0,
+        -48
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// At this point items[0].json is the clean legal JSON object\nlet legalJson = items[0].json;\n\n// Safety: if it's still wrapped in an array for some reason, unwrap it\nif (Array.isArray(legalJson)) {\n  legalJson = legalJson[0] || {};\n}\n\nconst jsonString = JSON.stringify(legalJson, null, 2);\n\nreturn [\n  {\n    json: {\n      filePath: \"/data/uploads/reports/latest.json\",\n      data: jsonString\n    }\n  }\n];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        -48
+      ],
+      "id": "cc5395fa-fe78-449e-bb63-eac2c6a6bcb2",
+      "name": "Prepare JSON file"
+    },
+    {
+      "parameters": {
+        "operation": "toText",
+        "sourceProperty": "data",
+        "options": {
+          "encoding": "utf8",
+          "fileName": "={{$json[\"filePath\"]}}"
+        }
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        672,
+        -48
+      ],
+      "id": "98d3c5d2-335f-44ac-afd6-06abc4d743ee",
+      "name": "Convert to File"
+    },
+    {
+      "parameters": {
+        "operation": "write",
+        "fileName": "=/data/uploads/reports/latest.json",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.readWriteFile",
+      "typeVersion": 1,
+      "position": [
+        896,
+        -48
+      ],
+      "id": "33b9eb22-6146-4c82-bab7-a1ad71960af7",
+      "name": "Read/Write Files from Disk"
+    },
+    {
+      "parameters": {
+        "command": "=. /data/venv/bin/activate && python /data/json_to_all.py \"/data/uploads/reports/latest.json\""
+      },
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1120,
+        -48
+      ],
+      "id": "f4af4b6f-0d48-4493-808b-8298a1732ce8",
+      "name": "Execute Command"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Input: full HTTP response from Ollama Analysis\n// Real legal JSON is in item.json.response (string)\n\nconst item = items[0];\nlet raw = item.json.response;\n\n// Sometimes Ollama might already return an object/array.\n// Handle all cases safely.\nif (typeof raw !== 'string') {\n  // If it's already JSON, unwrap first element if it's an array\n  let parsed = raw;\n  if (Array.isArray(parsed)) {\n    parsed = parsed[0] || {};\n  }\n  return [{ json: parsed }];\n}\n\nraw = raw.trim();\n\n// If in future you get json ...  wrappers, you can clean here.\n// raw = raw.replace(/^json/i, '')\n//          .replace(/^/i, '')\n//          .replace(/```$/i, '')\n//          .trim();\n\nlet parsed;\ntry {\n  parsed = JSON.parse(raw);\n} catch (e) {\n  throw new Error('Failed to JSON.parse Ollama response: ' + e.message);\n}\n\n// If parsed is an array, take the first element\nif (Array.isArray(parsed)) {\n  parsed = parsed[0] || {};\n}\n\nreturn [{ json: parsed }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        224,
+        -48
+      ],
+      "id": "c565174a-c34d-465b-b342-9c13cc5ca8a2",
+      "name": "Code in JavaScript"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Legal Intake Webhook": {
+      "main": [
+        [
+          {
+            "node": "Save Upload to /data/uploads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Upload to /data/uploads": {
+      "main": [
+        [
+          {
+            "node": "File Info",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "File Info": {
+      "main": [
+        [
+          {
+            "node": "Route by Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Type": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Extract PDF Text",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Extract DOCX Text",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Transcribe Audio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract PDF Text": {
+      "main": [
+        [
+          {
+            "node": "Ollama Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract DOCX Text": {
+      "main": [
+        [
+          {
+            "node": "Ollama Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcribe Audio": {
+      "main": [
+        [
+          {
+            "node": "Ollama Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ollama Analysis": {
+      "main": [
+        [
+          {
+            "node": "Code in JavaScript",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare JSON file": {
+      "main": [
+        [
+          {
+            "node": "Convert to File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Convert to File": {
+      "main": [
+        [
+          {
+            "node": "Read/Write Files from Disk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read/Write Files from Disk": {
+      "main": [
+        [
+          {
+            "node": "Execute Command",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code in JavaScript": {
+      "main": [
+        [
+          {
+            "node": "Prepare JSON file",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Execute Command": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "b9857b81-ad68-4b03-b898-3faf1e107439",
+  "meta": {
+    "instanceId": "4915e53176cc67536151c8f24d3f1ac58af8785804f73b4d24a6dc14ef8fcf7c"
+  },
+  "id": "L1p5TnDMSo5JIlV0",
+  "tags": []
+}
