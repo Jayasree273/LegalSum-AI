@@ -112,17 +112,14 @@ The generated legal report contains:
 
 ### Lawyer Document Analysis Workflow
 
-(n8n workflow screenshot)
 ![n8n workflow](screenshots/n8n-workflow.jpeg)
 
 ### AI Legal Assistant Workflow
 
-(chatbot workflow screenshot)
 ![Chatbot Workflow](screenshots/chatbot-workflow.jpeg)
 
 ### Frontend
 
-(frontend screenshot)
 ![Frontend-0](screenshots/frontend-0.jpeg)
 ![Frontend-1](screenshots/frontend-1.jpeg)
 
