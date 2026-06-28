@@ -1,0 +1,9 @@
+pdfplumber
+python-docx
+reportlab
+openpyxl
+openai-whisper
+torch
+PyMuPDF
+pytesseract
+Pillow
