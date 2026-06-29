@@ -170,13 +170,25 @@ MIT License
 
 ## Author
 
-Jayasree
+Jayasree R
 
 Information Technology Undergraduate
 
 Coimbatore Institute of Technology
 
-Raasika 
+Raasika C
+
+Information Technology Undergraduate
+
+Coimbatore Institute of Technology
+
+Thiraj V S
+
+Information Technology Undergraduate
+
+Coimbatore Institute of Technology
+
+Yuvasree I
 
 Information Technology Undergraduate
 
